@@ -1,678 +1,365 @@
-"use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
-// ─── PALETTE 2A DESIGN & BUILD ────────────────────────────────────────────
+// ─── PALETTE ─────────────────────────────────────────────────────────────
 const C = {
-  anthracite:      "#1C1F24",
-  anthraciteMid:   "#2A2E35",
-  anthraciteLight: "#353A42",
-  orange:          "#E8650A",
-  orangeLight:     "#FF8C3A",
-  orangeDim:       "#7A3505",
-  text:            "#F0EDE8",
-  textMuted:       "#9A9590",
-  textDim:         "#6A6560",
-  green:           "#2ECC8A",
-  red:             "#E84A4A",
-  redDim:          "#5C1A1A",
-  amber:           "#F5A623",
-  amberDim:        "#6B4510",
+  dark:        "#111318",
+  darkMid:     "#1A1E25",
+  darkCard:    "#22262F",
+  darkBorder:  "#2E333D",
+  orange:      "#F06A00",
+  orangeGlow:  "#FF8C3A",
+  orangeDim:   "#6B3000",
+  cream:       "#F2EDE6",
+  creamMuted:  "#A09A92",
+  creamDim:    "#5C5650",
+  green:       "#1FC87A",
+  greenDim:    "#0A3D25",
+  red:         "#E84545",
+  redDim:      "#3D0F0F",
+  amber:       "#F5A623",
+  amberDim:    "#5A3800",
+  blue:        "#3B9EFF",
+  blueDim:     "#0C2A50",
 };
 
-// ─── HELPER : calcul béton commun ────────────────────────────────────────
+// ─── HELPER : béton ───────────────────────────────────────────────────────
 function beton(volBrut, perte) {
   const v = volBrut * (1 + perte / 100);
   return [
-    { l: "Volume béton brut",   v: volBrut.toFixed(3), u: "m³" },
-    { l: "Volume + perte",      v: v.toFixed(3),        u: "m³", n: `+${perte}% perte` },
-    { l: "Ciment",              v: Math.ceil((v * 350) / 50), u: "sacs 50 kg" },
-    { l: "Sable",               v: (v * 0.5).toFixed(2), u: "m³" },
-    { l: "Gravier",             v: (v * 0.8).toFixed(2), u: "m³" },
-    { l: "Eau estimée",         v: Math.round(v * 175),  u: "litres" },
+    { l: "Volume béton brut",  v: volBrut.toFixed(3), u: "m³" },
+    { l: "Volume + perte",     v: v.toFixed(3),        u: "m³", n: `+${perte}%` },
+    { l: "Ciment",             v: Math.ceil((v*350)/50), u: "sacs 50 kg" },
+    { l: "Sable",              v: (v*0.5).toFixed(2),  u: "m³" },
+    { l: "Gravier",            v: (v*0.8).toFixed(2),  u: "m³" },
+    { l: "Eau estimée",        v: Math.round(v*175),   u: "litres" },
   ];
 }
 
-// ─── DONNÉES FERRAILLAGE : poids théoriques HA ────────────────────────────
-// Formule officielle : poids (kg/ml) = D² / 162
-const HA_DIAMS = [6, 8, 10, 12, 14, 16, 20, 25, 32];
-function poidsUnitaire(d) { return (d * d) / 162; }
+// ─── FERRAILLAGE ──────────────────────────────────────────────────────────
+const HA_DIAMS = [6,8,10,12,14,16,20,25,32];
+const RECOUV   = { recouvrement:50, ancrage:40, chute_pct:3 };
+function pU(d){ return (d*d)/162; }
 
-// Longueurs de recouvrement réglementaires (en nombre de diamètres)
-// Selon Eurocode 2 / règles BAEL — béton C25/30
-const RECOUVREMENT_COEFF = { ancrage: 40, recouvrement: 50, chute_pct: 3 };
-
-// ─── TOUS LES MODULES ────────────────────────────────────────────────────
+// ─── MODULES ─────────────────────────────────────────────────────────────
 const MODULES = [
-  {
-    id: "gros-oeuvre", label: "Gros œuvre", icon: "⬛",
-    subcats: [
-      {
-        id: "terrassement", label: "Terrassement",
-        fields: [
-          { id: "longueur",    label: "Longueur",              unit: "m" },
-          { id: "largeur",     label: "Largeur",               unit: "m" },
-          { id: "profondeur",  label: "Profondeur",            unit: "m" },
-          { id: "remblai_pct", label: "% remblai réutilisé",  unit: "%", def: 30 },
-          { id: "cap_camion",  label: "Capacité camion",       unit: "m³", def: 10 },
-        ],
-        calc: (v) => {
-          const vol = v.longueur * v.largeur * v.profondeur;
-          const foisonne = vol * 1.25;
-          const remblai = vol * (v.remblai_pct / 100);
-          const deblai = vol - remblai;
-          return [
-            { l: "Volume fouille",             v: vol.toFixed(2),      u: "m³" },
-            { l: "Volume foisonné (évac.)",    v: foisonne.toFixed(2), u: "m³", n: "×1,25 coeff." },
-            { l: "Déblai à évacuer",           v: deblai.toFixed(2),   u: "m³" },
-            { l: "Remblai réutilisable",       v: remblai.toFixed(2),  u: "m³" },
-            { l: "Rotations camion",           v: Math.ceil(foisonne / v.cap_camion), u: "voyages" },
-            { l: "Surface compactage",         v: (v.longueur * v.largeur).toFixed(1), u: "m²" },
-          ];
-        },
-      },
-      {
-        id: "beton-semelle", label: "Béton — Semelles",
-        fields: [
-          { id: "longueur",  label: "Longueur semelle", unit: "m" },
-          { id: "largeur",   label: "Largeur semelle",  unit: "m" },
-          { id: "epaisseur", label: "Épaisseur",        unit: "m", def: 0.40 },
-          { id: "nb",        label: "Nombre semelles",  unit: "u", def: 1 },
-          { id: "perte",     label: "Marge perte",      unit: "%", def: 8 },
-        ],
-        calc: (v) => beton(v.longueur * v.largeur * v.epaisseur * v.nb, v.perte),
-      },
-      {
-        id: "beton-poteau", label: "Béton — Poteaux",
-        fields: [
-          { id: "section",  label: "Section (côté carré)", unit: "m", def: 0.25 },
-          { id: "hauteur",  label: "Hauteur poteau",       unit: "m" },
-          { id: "nb",       label: "Nombre poteaux",       unit: "u", def: 4 },
-          { id: "perte",    label: "Marge perte",          unit: "%", def: 8 },
-        ],
-        calc: (v) => beton(v.section * v.section * v.hauteur * v.nb, v.perte),
-      },
-      {
-        id: "beton-longrine", label: "Béton — Longrines",
-        fields: [
-          { id: "longueur", label: "Longueur totale",  unit: "m" },
-          { id: "larg_s",   label: "Largeur section",  unit: "m", def: 0.20 },
-          { id: "haut_s",   label: "Hauteur section",  unit: "m", def: 0.30 },
-          { id: "perte",    label: "Marge perte",      unit: "%", def: 8 },
-        ],
-        calc: (v) => beton(v.longueur * v.larg_s * v.haut_s, v.perte),
-      },
-      {
-        id: "beton-dalle", label: "Béton — Dalle",
-        fields: [
-          { id: "longueur",  label: "Longueur",    unit: "m" },
-          { id: "largeur",   label: "Largeur",     unit: "m" },
-          { id: "epaisseur", label: "Épaisseur",   unit: "m", def: 0.12 },
-          { id: "perte",     label: "Marge perte", unit: "%", def: 8 },
-        ],
-        calc: (v) => beton(v.longueur * v.largeur * v.epaisseur, v.perte),
-      },
-      {
-        id: "beton-poutre", label: "Béton — Poutres",
-        fields: [
-          { id: "longueur", label: "Longueur totale poutres", unit: "m" },
-          { id: "larg_s",   label: "Largeur section",         unit: "m", def: 0.20 },
-          { id: "haut_s",   label: "Hauteur section",         unit: "m", def: 0.40 },
-          { id: "perte",    label: "Marge perte",             unit: "%", def: 8 },
-        ],
-        calc: (v) => beton(v.longueur * v.larg_s * v.haut_s, v.perte),
-      },
-
-      // ── FERRAILLAGE ─────────────────────────────────────────────────────
-      {
-        id: "ferraillage", label: "Ferraillage HA",
-        isFerraillage: true, // flag pour rendu spécial
-        fields: [
-          // ENTRÉES PRINCIPALES
-          { id: "poids_theorique",  label: "Poids théorique projet", unit: "kg",  def: 0,
-            hint: "Issu des plans de ferraillage" },
-          { id: "diametre",         label: "Diamètre HA",            unit: "mm",  def: 12,
-            opts: HA_DIAMS },
-          { id: "long_barre",       label: "Longueur réelle barre",  unit: "m",   def: 12,
-            hint: "Longueur commerciale (ex : 12 m)" },
-          // RECOUVREMENTS & ANCRAGES
-          { id: "nb_recouv",        label: "Nombre de recouvrements", unit: "u",  def: 0,
-            hint: "Jonctions entre barres" },
-          { id: "nb_ancrages",      label: "Nombre d'ancrages",      unit: "u",  def: 0,
-            hint: "Extrémités ancrées dans béton" },
-          // CADRES / ÉTRIERS
-          { id: "long_cadre",       label: "Long. développée cadre", unit: "m",   def: 1.2 },
-          { id: "nb_cadres",        label: "Nombre cadres/étriers",  unit: "u",   def: 0 },
-          { id: "diam_cadre",       label: "Diamètre cadres",        unit: "mm",  def: 6,
-            opts: [6, 8, 10] },
-          // PERTES CHANTIER
-          { id: "perte_chantier",   label: "Perte chantier",         unit: "%",   def: 5,
-            opts: [3, 5] },
-          // COÛT
-          { id: "prix_tonne",       label: "Prix acier (par tonne)", unit: "FCFA/t", def: 450000,
-            hint: "Prix marché Lomé actuel" },
-        ],
-        calc: (v) => {
-          const d = v.diametre;
-          const pu = poidsUnitaire(d);                     // kg/ml
-          const long_recouv = (RECOUVREMENT_COEFF.recouvrement * d / 1000) * v.nb_recouv; // m
-          const long_ancrage = (RECOUVREMENT_COEFF.ancrage * d / 1000) * v.nb_ancrages;  // m
-          const long_chutes_pct = RECOUVREMENT_COEFF.chute_pct / 100;                    // 3%
-
-          // Longueur totale nécessaire (théorique + recouvrements + ancrages)
-          const long_theorique = v.poids_theorique > 0
-            ? v.poids_theorique / pu
-            : 0;
-          const long_suppl = long_recouv + long_ancrage;
-          const long_avant_chutes = long_theorique + long_suppl;
-          const long_chutes = long_avant_chutes * long_chutes_pct;
-          const long_nette_necessaire = long_avant_chutes + long_chutes;
-
-          // Perte chantier globale (sur la long. nette)
-          const long_avec_perte = long_nette_necessaire * (1 + v.perte_chantier / 100);
-
-          // Nombre de barres à acheter (arrondi au sup)
-          const nb_barres = Math.ceil(long_avec_perte / v.long_barre);
-          const long_achetee = nb_barres * v.long_barre;
-
-          // Poids réel acheté
-          const poids_achete = long_achetee * pu;
-
-          // Poids pertes totales
-          const poids_perte = poids_achete - v.poids_theorique;
-          const pct_perte_reelle = v.poids_theorique > 0
-            ? ((poids_perte / v.poids_theorique) * 100).toFixed(1) : "—";
-
-          // Cadres / étriers
-          const poids_cadres = v.nb_cadres > 0
-            ? poidsUnitaire(v.diam_cadre) * v.long_cadre * v.nb_cadres : 0;
-
-          const poids_total = poids_achete + poids_cadres;
-
-          // Coût
-          const cout_total = (poids_total / 1000) * v.prix_tonne;
-          const cout_perte = (poids_perte / 1000) * v.prix_tonne;
-
-          return {
-            type: "ferraillage",
-            sections: [
-              {
-                title: "Longueurs calculées",
-                color: "blue",
-                items: [
-                  { l: "Long. théorique (plans)",     v: long_theorique.toFixed(1),       u: "ml" },
-                  { l: `Recouvrements (${RECOUVREMENT_COEFF.recouvrement}×ø)`, v: long_recouv.toFixed(2), u: "ml" },
-                  { l: `Ancrages (${RECOUVREMENT_COEFF.ancrage}×ø)`,          v: long_ancrage.toFixed(2), u: "ml" },
-                  { l: "Chutes estimées (3%)",        v: long_chutes.toFixed(2),           u: "ml" },
-                  { l: "Long. nette nécessaire",      v: long_nette_necessaire.toFixed(1), u: "ml" },
-                  { l: `+ Perte chantier (${v.perte_chantier}%)`, v: long_avec_perte.toFixed(1), u: "ml" },
-                ],
-              },
-              {
-                title: "Barres à acheter",
-                color: "green",
-                items: [
-                  { l: `Barres HA${d} de ${v.long_barre} m`,  v: nb_barres,                    u: "barres" },
-                  { l: "Longueur achetée totale",              v: long_achetee.toFixed(1),       u: "ml" },
-                  { l: "Poids unitaire HA" + d,                v: pu.toFixed(4),                 u: "kg/ml" },
-                  { l: "Poids acier principal acheté",         v: poids_achete.toFixed(1),       u: "kg" },
-                  { l: `Poids cadres/étriers HA${v.diam_cadre}`, v: poids_cadres.toFixed(1),    u: "kg" },
-                  { l: "Poids total acier",                    v: poids_total.toFixed(1),        u: "kg" },
-                ],
-              },
-              {
-                title: "Pertes & surcoût",
-                color: "red",
-                items: [
-                  { l: "Poids théorique projet",    v: v.poids_theorique.toFixed(1),  u: "kg" },
-                  { l: "Poids réel acheté",         v: poids_achete.toFixed(1),       u: "kg" },
-                  { l: "Poids perdu (chutes+perte)", v: poids_perte.toFixed(1),       u: "kg" },
-                  { l: "% perte réelle",            v: pct_perte_reelle,              u: "%" },
-                  { l: "Coût perte (FCFA)",         v: Math.round(cout_perte).toLocaleString("fr-FR"), u: "FCFA" },
-                ],
-              },
-              {
-                title: "Coût d'achat réel",
-                color: "amber",
-                items: [
-                  { l: "Prix unitaire tonne",       v: v.prix_tonne.toLocaleString("fr-FR"), u: "FCFA/t" },
-                  { l: "Coût acier principal",      v: Math.round((poids_achete/1000)*v.prix_tonne).toLocaleString("fr-FR"), u: "FCFA" },
-                  { l: "Coût cadres/étriers",       v: Math.round((poids_cadres/1000)*v.prix_tonne).toLocaleString("fr-FR"), u: "FCFA" },
-                  { l: "COÛT TOTAL RÉEL",           v: Math.round(cout_total).toLocaleString("fr-FR"), u: "FCFA", highlight: true },
-                ],
-              },
-            ],
-          };
-        },
-      },
-
-      {
-        id: "coffrage", label: "Coffrage",
-        fields: [
-          { id: "perimetre",  label: "Périmètre développé", unit: "m" },
-          { id: "hauteur",    label: "Hauteur coffrée",     unit: "m" },
-          { id: "nb_el",      label: "Nombre d'éléments",   unit: "u", def: 1 },
-          { id: "perte",      label: "Marge perte",         unit: "%", def: 15 },
-        ],
-        calc: (v) => {
-          const s = v.perimetre * v.hauteur * v.nb_el;
-          const sP = s * (1 + v.perte / 100);
-          return [
-            { l: "Surface nette coffrage",          v: s.toFixed(1),          u: "m²" },
-            { l: "Surface + perte",                 v: sP.toFixed(1),         u: "m²", n: `+${v.perte}%` },
-            { l: "Panneaux contreplaqué 1,2×1,2 m", v: Math.ceil(sP / 1.44), u: "u" },
-            { l: "Étais de soutien estimés",        v: Math.ceil(sP / 2),     u: "u" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "maconnerie", label: "Maçonnerie", icon: "🧱",
-    subcats: [
-      {
-        id: "parpaing", label: "Mur agglo / parpaing",
-        fields: [
-          { id: "longueur",   label: "Longueur mur",         unit: "m" },
-          { id: "hauteur",    label: "Hauteur mur",          unit: "m" },
-          { id: "epaisseur",  label: "Épaisseur agglo",      unit: "cm", def: 15, opts: [10, 12, 15, 20] },
-          { id: "nb_ouv",     label: "Nb ouvertures",        unit: "u",  def: 0 },
-          { id: "surf_ouv",   label: "Surface / ouverture",  unit: "m²", def: 2 },
-          { id: "perte",      label: "Marge perte",          unit: "%",  def: 5 },
-        ],
-        calc: (v) => {
-          const surf = v.longueur * v.hauteur - v.nb_ouv * v.surf_ouv;
-          const nb = Math.ceil((surf / (0.40 * 0.20)) * (1 + v.perte / 100));
-          const mvol = surf * 0.015;
-          return [
-            { l: "Surface nette mur",   v: surf.toFixed(1),             u: "m²" },
-            { l: `Agglos ${v.epaisseur} cm`, v: nb,                     u: "unités" },
-            { l: "Volume mortier",      v: mvol.toFixed(3),             u: "m³" },
-            { l: "Ciment mortier",      v: Math.ceil((mvol * 300) / 50), u: "sacs 50 kg" },
-            { l: "Sable",              v: (mvol * 1.5).toFixed(2),      u: "m³" },
-            { l: "Eau estimée",        v: Math.round(mvol * 180),       u: "litres" },
-          ];
-        },
-      },
-      {
-        id: "enduit", label: "Enduit / crépi",
-        fields: [
-          { id: "surface",     label: "Surface à enduire", unit: "m²" },
-          { id: "epaisseur",   label: "Épaisseur enduit",  unit: "mm", def: 15 },
-          { id: "nb_couches",  label: "Nombre de couches", unit: "u",  def: 2 },
-          { id: "perte",       label: "Marge perte",       unit: "%",  def: 10 },
-        ],
-        calc: (v) => {
-          const vol = v.surface * (v.epaisseur / 1000) * v.nb_couches * (1 + v.perte / 100);
-          return [
-            { l: "Volume mortier total", v: vol.toFixed(3),              u: "m³" },
-            { l: "Ciment",              v: Math.ceil((vol * 350) / 50),  u: "sacs 50 kg" },
-            { l: "Sable fin",           v: (vol * 1.5).toFixed(2),       u: "m³" },
-            { l: "Eau estimée",         v: Math.round(vol * 170),        u: "litres" },
-          ];
-        },
-      },
-      {
-        id: "chape", label: "Chape",
-        fields: [
-          { id: "surface",   label: "Surface",       unit: "m²" },
-          { id: "epaisseur", label: "Épaisseur",     unit: "cm", def: 5 },
-          { id: "perte",     label: "Marge perte",   unit: "%",  def: 8 },
-        ],
-        calc: (v) => {
-          const vol = v.surface * (v.epaisseur / 100) * (1 + v.perte / 100);
-          return [
-            { l: "Volume chape + perte", v: vol.toFixed(3),             u: "m³" },
-            { l: "Ciment",              v: Math.ceil((vol * 350) / 50), u: "sacs 50 kg" },
-            { l: "Sable",               v: (vol * 1.4).toFixed(2),      u: "m³" },
-            { l: "Eau estimée",         v: Math.round(vol * 160),       u: "litres" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "sols", label: "Dalle & Sols", icon: "🔲",
-    subcats: [
-      {
-        id: "carrelage", label: "Carrelage",
-        fields: [
-          { id: "longueur", label: "Longueur",     unit: "m" },
-          { id: "largeur",  label: "Largeur",      unit: "m" },
-          { id: "format",   label: "Format carreau", unit: "cm", def: "60x60",
-            opts: ["30x30", "40x40", "45x45", "60x60", "60x120", "80x80", "120x120"] },
-          { id: "perte",    label: "Marge perte",  unit: "%",  def: 10 },
-        ],
-        calc: (v) => {
-          const surf = v.longueur * v.largeur;
-          const fmt = String(v.format || "60x60").split("x").map(Number);
-          const sc = (fmt[0] / 100) * (fmt[1] / 100);
-          const nb = Math.ceil((surf * (1 + v.perte / 100)) / sc);
-          return [
-            { l: "Surface brute",                v: surf.toFixed(1),                     u: "m²" },
-            { l: "Surface + perte",              v: (surf * (1 + v.perte / 100)).toFixed(1), u: "m²", n: `+${v.perte}%` },
-            { l: `Carreaux ${v.format}`,         v: nb,                                  u: "unités" },
-            { l: "Colle carrelage",              v: Math.ceil((surf * 5) / 25),          u: "sacs 25 kg" },
-            { l: "Joint",                        v: (surf * 0.3).toFixed(1),             u: "kg" },
-          ];
-        },
-      },
-      {
-        id: "parquet-pvc", label: "Parquet / PVC",
-        fields: [
-          { id: "longueur", label: "Longueur pièce",    unit: "m" },
-          { id: "largeur",  label: "Largeur pièce",     unit: "m" },
-          { id: "perte",    label: "Marge perte coupe", unit: "%", def: 10 },
-        ],
-        calc: (v) => {
-          const s = v.longueur * v.largeur;
-          const sP = s * (1 + v.perte / 100);
-          return [
-            { l: "Surface nette",         v: s.toFixed(1),        u: "m²" },
-            { l: "Surface à commander",   v: sP.toFixed(1),       u: "m²", n: `+${v.perte}% coupe` },
-            { l: "Boîtes (typ. 2 m²)",    v: Math.ceil(sP / 2),   u: "boîtes" },
-            { l: "Colle sol (6 kg/m²)",   v: Math.ceil(s * 6),    u: "kg" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "toiture", label: "Toiture", icon: "🏠",
-    subcats: [
-      {
-        id: "tole", label: "Couverture tôle / bac",
-        fields: [
-          { id: "longueur",    label: "Longueur faîtage",      unit: "m" },
-          { id: "largeur",     label: "Largeur demi-versant",  unit: "m" },
-          { id: "pente",       label: "Pente",                 unit: "%", def: 30 },
-          { id: "nb_versants", label: "Nombre de versants",    unit: "u", def: 2 },
-          { id: "perte",       label: "Marge perte",           unit: "%", def: 8 },
-        ],
-        calc: (v) => {
-          const coeff = Math.sqrt(1 + (v.pente / 100) ** 2);
-          const sv = v.longueur * v.largeur * coeff;
-          const sT = sv * v.nb_versants * (1 + v.perte / 100);
-          const toles = Math.ceil(sT / 0.75);
-          return [
-            { l: "Surface par versant",       v: sv.toFixed(1),         u: "m²" },
-            { l: "Surface totale + perte",    v: sT.toFixed(1),         u: "m²" },
-            { l: "Tôles bac (75 cm utile)",   v: toles,                  u: "tôles" },
-            { l: "Vis de fixation",           v: toles * 8,              u: "u" },
-            { l: "Faîtage",                   v: Math.ceil(v.longueur / 2), u: "u" },
-            { l: "Gouttières",                v: (v.longueur * v.nb_versants).toFixed(1), u: "ml" },
-          ];
-        },
-      },
-      {
-        id: "charpente", label: "Charpente bois",
-        fields: [
-          { id: "longueur",    label: "Longueur bâtiment", unit: "m" },
-          { id: "largeur",     label: "Largeur",           unit: "m" },
-          { id: "espacement",  label: "Espacement pannes", unit: "m", def: 1.5 },
-          { id: "perte",       label: "Marge perte",       unit: "%", def: 10 },
-        ],
-        calc: (v) => {
-          const nbP = Math.ceil(v.largeur / v.espacement) + 1;
-          return [
-            { l: "Nombre pannes",          v: nbP * 2,                                               u: "pannes" },
-            { l: "Longueur totale pannes", v: (nbP * v.longueur * (1 + v.perte / 100)).toFixed(1),   u: "ml" },
-            { l: "Chevrons estimés",       v: Math.ceil(v.longueur / 0.6) * 2,                       u: "u" },
-            { l: "Liteaux (indicatif)",    v: (v.longueur * nbP * 0.4 * (1 + v.perte / 100)).toFixed(1), u: "ml" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "peinture", label: "Peinture & Finitions", icon: "🎨",
-    subcats: [
-      {
-        id: "peinture-mur", label: "Peinture murale",
-        fields: [
-          { id: "surface",     label: "Surface totale",       unit: "m²" },
-          { id: "nb_couches",  label: "Nombre de couches",    unit: "u",     def: 2 },
-          { id: "rendement",   label: "Rendement peinture",   unit: "m²/L",  def: 10 },
-          { id: "perte",       label: "Marge perte",          unit: "%",     def: 10 },
-        ],
-        calc: (v) => {
-          const tot = v.surface * v.nb_couches * (1 + v.perte / 100);
-          const L = tot / v.rendement;
-          return [
-            { l: "Surface effective totale", v: tot.toFixed(1),        u: "m²" },
-            { l: "Peinture nécessaire",      v: L.toFixed(1),           u: "litres" },
-            { l: "Pots de 20 L",             v: Math.ceil(L / 20),      u: "pots" },
-            { l: "Pots de 5 L",              v: Math.ceil(L / 5),       u: "pots" },
-          ];
-        },
-      },
-      {
-        id: "faux-plafond", label: "Faux plafond",
-        fields: [
-          { id: "longueur", label: "Longueur pièce", unit: "m" },
-          { id: "largeur",  label: "Largeur pièce",  unit: "m" },
-          { id: "perte",    label: "Marge perte",    unit: "%", def: 10 },
-        ],
-        calc: (v) => {
-          const s = v.longueur * v.largeur * (1 + v.perte / 100);
-          const per = 2 * (v.longueur + v.largeur);
-          return [
-            { l: "Surface faux plafond", v: s.toFixed(1),            u: "m²" },
-            { l: "Dalles 60×60",         v: Math.ceil(s / 0.36),     u: "u" },
-            { l: "Profilés porteurs",    v: Math.ceil(s / 1.2),      u: "u" },
-            { l: "Cornières périmètre",  v: Math.ceil(per * 1.1),    u: "ml" },
-            { l: "Suspentes",            v: Math.ceil(s),             u: "u" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "plomberie", label: "Plomberie", icon: "🔧",
-    subcats: [
-      {
-        id: "reseau", label: "Réseau eau / évacuation",
-        fields: [
-          { id: "long_alim",  label: "Alimentation (eau)", unit: "m" },
-          { id: "long_evac",  label: "Évacuation EU/EV",   unit: "m" },
-          { id: "nb_points",  label: "Points d'eau",       unit: "u" },
-          { id: "perte",      label: "Marge perte",        unit: "%", def: 15 },
-        ],
-        calc: (v) => [
-          { l: "Tuyaux alimentation", v: (v.long_alim * (1 + v.perte / 100)).toFixed(1), u: "ml" },
-          { l: "Tuyaux évacuation",   v: (v.long_evac * (1 + v.perte / 100)).toFixed(1), u: "ml" },
-          { l: "Raccords estimés",    v: v.nb_points * 4, u: "u" },
-          { l: "Robinetteries",       v: v.nb_points,     u: "u" },
-        ],
-      },
-    ],
-  },
-
-  {
-    id: "electricite", label: "Électricité", icon: "⚡",
-    subcats: [
-      {
-        id: "cablage", label: "Câblage & gaines",
-        fields: [
-          { id: "surface",      label: "Surface habitable",       unit: "m²" },
-          { id: "nb_prises",    label: "Nombre de prises",        unit: "u" },
-          { id: "nb_inter",     label: "Nombre d'interrupteurs",  unit: "u" },
-          { id: "nb_circuits",  label: "Nombre de circuits",      unit: "u", def: 4 },
-          { id: "perte",        label: "Marge perte",             unit: "%", def: 15 },
-        ],
-        calc: (v) => {
-          const cable = (v.surface * 3 + v.nb_prises * 3 + v.nb_inter * 2) * (1 + v.perte / 100);
-          return [
-            { l: "Câble électrique total",  v: cable.toFixed(0),           u: "ml" },
-            { l: "Gaines ICTA",             v: (cable * 0.8).toFixed(0),   u: "ml" },
-            { l: "Prises",                  v: v.nb_prises,                 u: "u" },
-            { l: "Interrupteurs",           v: v.nb_inter,                  u: "u" },
-            { l: "Disjoncteurs tableau",    v: v.nb_circuits + 1,           u: "u" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "menuiserie", label: "Menuiserie", icon: "🚪",
-    subcats: [
-      {
-        id: "portes-fen", label: "Portes & Fenêtres",
-        fields: [
-          { id: "nb_portes",   label: "Nombre de portes",    unit: "u",  def: 3 },
-          { id: "larg_porte",  label: "Largeur porte",       unit: "m",  def: 0.90 },
-          { id: "haut_porte",  label: "Hauteur porte",       unit: "m",  def: 2.10 },
-          { id: "nb_fen",      label: "Nombre de fenêtres",  unit: "u",  def: 4 },
-          { id: "larg_fen",    label: "Largeur fenêtre",     unit: "m",  def: 1.20 },
-          { id: "haut_fen",    label: "Hauteur fenêtre",     unit: "m",  def: 1.20 },
-        ],
-        calc: (v) => {
-          const sP = v.nb_portes * v.larg_porte * v.haut_porte;
-          const sF = v.nb_fen * v.larg_fen * v.haut_fen;
-          return [
-            { l: "Portes",          v: v.nb_portes,        u: "u" },
-            { l: "Surface portes",  v: sP.toFixed(1),      u: "m²" },
-            { l: "Fenêtres",        v: v.nb_fen,           u: "u" },
-            { l: "Surface vitrée",  v: sF.toFixed(1),      u: "m²" },
-            { l: "Verre commandé",  v: (sF * 1.1).toFixed(1), u: "m²" },
-          ];
-        },
-      },
-    ],
-  },
-
-  {
-    id: "vrd", label: "VRD & Extérieur", icon: "🛣️",
-    subcats: [
-      {
-        id: "paves", label: "Pavés / voirie",
-        fields: [
-          { id: "longueur", label: "Longueur",     unit: "m" },
-          { id: "largeur",  label: "Largeur",      unit: "m" },
-          { id: "format",   label: "Format pavé",  unit: "cm", def: 20, opts: [15, 20, 25] },
-          { id: "perte",    label: "Marge perte",  unit: "%",  def: 5 },
-        ],
-        calc: (v) => {
-          const s = v.longueur * v.largeur, f = v.format / 100;
-          return [
-            { l: "Surface à paver",           v: s.toFixed(1),                                         u: "m²" },
-            { l: `Pavés ${v.format}×${v.format} cm`, v: Math.ceil((s * (1 + v.perte / 100)) / (f * f)), u: "u" },
-            { l: "Sable lit de pose",         v: (s * 0.03).toFixed(2),                                u: "m³" },
-            { l: "Bordures périmètre",        v: Math.ceil(2 * (v.longueur + v.largeur)),               u: "ml" },
-            { l: "Caniveaux",                 v: Math.ceil(v.longueur * 2),                             u: "ml" },
-          ];
-        },
-      },
-      {
-        id: "beton-voirie", label: "Béton voirie",
-        fields: [
-          { id: "longueur",  label: "Longueur",    unit: "m" },
-          { id: "largeur",   label: "Largeur",     unit: "m" },
-          { id: "epaisseur", label: "Épaisseur",   unit: "m", def: 0.15 },
-          { id: "perte",     label: "Marge perte", unit: "%", def: 8 },
-        ],
-        calc: (v) => beton(v.longueur * v.largeur * v.epaisseur, v.perte),
-      },
-    ],
-  },
+  { id:"gros",    icon:"⬛", label:"Gros œuvre", subcats:[
+    { id:"terra",   label:"Terrassement", fields:[
+        {id:"longueur",label:"Longueur",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"profondeur",label:"Profondeur",u:"m"},
+        {id:"remblai_pct",label:"% remblai réutilisé",u:"%",def:30},
+        {id:"cap_camion",label:"Capacité camion",u:"m³",def:10}],
+      calc:(v)=>{
+        const vol=v.longueur*v.largeur*v.profondeur, fo=vol*1.25;
+        const rm=vol*(v.remblai_pct/100);
+        return[{l:"Volume fouille",v:vol.toFixed(2),u:"m³"},
+               {l:"Volume foisonné",v:fo.toFixed(2),u:"m³",n:"×1,25"},
+               {l:"Déblai à évacuer",v:(vol-rm).toFixed(2),u:"m³"},
+               {l:"Remblai réutilisable",v:rm.toFixed(2),u:"m³"},
+               {l:"Rotations camion",v:Math.ceil(fo/v.cap_camion),u:"voyages"},
+               {l:"Surface compactage",v:(v.longueur*v.largeur).toFixed(1),u:"m²"}];}},
+    { id:"b-sem",  label:"Béton — Semelles", fields:[
+        {id:"longueur",label:"Longueur",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"epaisseur",label:"Épaisseur",u:"m",def:0.40},
+        {id:"nb",label:"Nombre semelles",u:"u",def:1},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>beton(v.longueur*v.largeur*v.epaisseur*v.nb,v.perte)},
+    { id:"b-pot",  label:"Béton — Poteaux", fields:[
+        {id:"section",label:"Section (côté)",u:"m",def:0.25},
+        {id:"hauteur",label:"Hauteur",u:"m"},
+        {id:"nb",label:"Nombre poteaux",u:"u",def:4},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>beton(v.section*v.section*v.hauteur*v.nb,v.perte)},
+    { id:"b-lon",  label:"Béton — Longrines", fields:[
+        {id:"longueur",label:"Longueur totale",u:"m"},
+        {id:"larg_s",label:"Largeur section",u:"m",def:0.20},
+        {id:"haut_s",label:"Hauteur section",u:"m",def:0.30},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>beton(v.longueur*v.larg_s*v.haut_s,v.perte)},
+    { id:"b-dal",  label:"Béton — Dalle", fields:[
+        {id:"longueur",label:"Longueur",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"epaisseur",label:"Épaisseur",u:"m",def:0.12},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>beton(v.longueur*v.largeur*v.epaisseur,v.perte)},
+    { id:"b-pou",  label:"Béton — Poutres", fields:[
+        {id:"longueur",label:"Longueur totale",u:"m"},
+        {id:"larg_s",label:"Largeur section",u:"m",def:0.20},
+        {id:"haut_s",label:"Hauteur section",u:"m",def:0.40},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>beton(v.longueur*v.larg_s*v.haut_s,v.perte)},
+    { id:"ferr",   label:"Ferraillage HA", isFerr:true, fields:[
+        {id:"poids_theorique",label:"Poids théorique projet",u:"kg",def:0,hint:"Issu des plans de ferraillage"},
+        {id:"diametre",label:"Diamètre HA",u:"mm",def:12,opts:HA_DIAMS},
+        {id:"long_barre",label:"Long. réelle barre",u:"m",def:12,hint:"Longueur commerciale (ex: 12 m)"},
+        {id:"nb_recouv",label:"Nb recouvrements",u:"u",def:0,hint:"Jonctions entre barres"},
+        {id:"nb_ancrages",label:"Nb ancrages",u:"u",def:0,hint:"Extrémités ancrées dans béton"},
+        {id:"long_cadre",label:"Long. développée cadre",u:"m",def:1.2},
+        {id:"nb_cadres",label:"Nb cadres/étriers",u:"u",def:0},
+        {id:"diam_cadre",label:"Diamètre cadres",u:"mm",def:6,opts:[6,8,10]},
+        {id:"perte_chantier",label:"Perte chantier",u:"%",def:5,opts:[3,5]},
+        {id:"prix_tonne",label:"Prix acier (par tonne)",u:"FCFA/t",def:450000,hint:"Prix marché actuel"}],
+      calc:(v)=>{
+        const d=v.diametre, pu_=pU(d);
+        const lr=(RECOUV.recouvrement*d/1000)*v.nb_recouv;
+        const la=(RECOUV.ancrage*d/1000)*v.nb_ancrages;
+        const lt=v.poids_theorique>0?v.poids_theorique/pu_:0;
+        const lav=lt+lr+la;
+        const lch=lav*(RECOUV.chute_pct/100);
+        const ln=lav+lch;
+        const lp=ln*(1+v.perte_chantier/100);
+        const nb=Math.ceil(lp/v.long_barre);
+        const la2=nb*v.long_barre;
+        const pa=la2*pu_;
+        const pp=pa-v.poids_theorique;
+        const pct_p=v.poids_theorique>0?((pp/v.poids_theorique)*100).toFixed(1):"—";
+        const pc=v.nb_cadres>0?pU(v.diam_cadre)*v.long_cadre*v.nb_cadres:0;
+        const ptot=pa+pc;
+        const ctot=(ptot/1000)*v.prix_tonne;
+        const cp=(pp/1000)*v.prix_tonne;
+        return {type:"ferraillage",sections:[
+          {title:"Longueurs calculées",color:"blue",items:[
+            {l:"Long. théorique (plans)",v:lt.toFixed(1),u:"ml"},
+            {l:`Recouvrements (${RECOUV.recouvrement}×ø)`,v:lr.toFixed(2),u:"ml"},
+            {l:`Ancrages (${RECOUV.ancrage}×ø)`,v:la.toFixed(2),u:"ml"},
+            {l:"Chutes estimées (3%)",v:lch.toFixed(2),u:"ml"},
+            {l:"Long. nette nécessaire",v:ln.toFixed(1),u:"ml"},
+            {l:`+ Perte chantier (${v.perte_chantier}%)`,v:lp.toFixed(1),u:"ml"}]},
+          {title:"Barres à acheter",color:"green",items:[
+            {l:`Barres HA${d} de ${v.long_barre} m`,v:nb,u:"barres"},
+            {l:"Longueur achetée totale",v:la2.toFixed(1),u:"ml"},
+            {l:`Poids unitaire HA${d}`,v:pu_.toFixed(4),u:"kg/ml"},
+            {l:"Poids acier principal",v:pa.toFixed(1),u:"kg"},
+            {l:`Poids cadres HA${v.diam_cadre}`,v:pc.toFixed(1),u:"kg"},
+            {l:"Poids total acier",v:ptot.toFixed(1),u:"kg"}]},
+          {title:"Pertes & surcoût",color:"red",items:[
+            {l:"Poids théorique projet",v:v.poids_theorique.toFixed(1),u:"kg"},
+            {l:"Poids réel acheté",v:pa.toFixed(1),u:"kg"},
+            {l:"Poids perdu (chutes+perte)",v:pp.toFixed(1),u:"kg"},
+            {l:"% perte réelle",v:pct_p,u:"%"},
+            {l:"Coût perte",v:Math.round(cp).toLocaleString("fr-FR"),u:"FCFA"}]},
+          {title:"Coût d'achat réel",color:"amber",items:[
+            {l:"Prix unitaire tonne",v:v.prix_tonne.toLocaleString("fr-FR"),u:"FCFA/t"},
+            {l:"Coût acier principal",v:Math.round((pa/1000)*v.prix_tonne).toLocaleString("fr-FR"),u:"FCFA"},
+            {l:"Coût cadres/étriers",v:Math.round((pc/1000)*v.prix_tonne).toLocaleString("fr-FR"),u:"FCFA"},
+            {l:"COÛT TOTAL RÉEL",v:Math.round(ctot).toLocaleString("fr-FR"),u:"FCFA",highlight:true}]}]};
+      }},
+    { id:"cofr",  label:"Coffrage", fields:[
+        {id:"perimetre",label:"Périmètre développé",u:"m"},
+        {id:"hauteur",label:"Hauteur coffrée",u:"m"},
+        {id:"nb_el",label:"Nb éléments",u:"u",def:1},
+        {id:"perte",label:"Marge perte",u:"%",def:15}],
+      calc:(v)=>{
+        const s=v.perimetre*v.hauteur*v.nb_el, sP=s*(1+v.perte/100);
+        return[{l:"Surface nette coffrage",v:s.toFixed(1),u:"m²"},
+               {l:"Surface + perte",v:sP.toFixed(1),u:"m²",n:`+${v.perte}%`},
+               {l:"Panneaux contreplaqué (1,2×1,2)",v:Math.ceil(sP/1.44),u:"u"},
+               {l:"Étais de soutien",v:Math.ceil(sP/2),u:"u"}];}},
+  ]},
+  { id:"macon",   icon:"🧱", label:"Maçonnerie", subcats:[
+    { id:"parp",  label:"Mur agglo / parpaing", fields:[
+        {id:"longueur",label:"Longueur mur",u:"m"},{id:"hauteur",label:"Hauteur mur",u:"m"},
+        {id:"epaisseur",label:"Épaisseur agglo",u:"cm",def:15,opts:[10,12,15,20]},
+        {id:"nb_ouv",label:"Nb ouvertures",u:"u",def:0},
+        {id:"surf_ouv",label:"Surface/ouverture",u:"m²",def:2},
+        {id:"perte",label:"Marge perte",u:"%",def:5}],
+      calc:(v)=>{
+        const s=v.longueur*v.hauteur-v.nb_ouv*v.surf_ouv;
+        const nb=Math.ceil((s/(0.40*0.20))*(1+v.perte/100));
+        const mv=s*0.015;
+        return[{l:"Surface nette mur",v:s.toFixed(1),u:"m²"},
+               {l:`Agglos ${v.epaisseur} cm`,v:nb,u:"unités"},
+               {l:"Volume mortier",v:mv.toFixed(3),u:"m³"},
+               {l:"Ciment mortier",v:Math.ceil((mv*300)/50),u:"sacs 50 kg"},
+               {l:"Sable",v:(mv*1.5).toFixed(2),u:"m³"},
+               {l:"Eau estimée",v:Math.round(mv*180),u:"litres"}];}},
+    { id:"endu",  label:"Enduit / crépi", fields:[
+        {id:"surface",label:"Surface à enduire",u:"m²"},
+        {id:"epaisseur",label:"Épaisseur enduit",u:"mm",def:15},
+        {id:"nb_couches",label:"Nombre de couches",u:"u",def:2},
+        {id:"perte",label:"Marge perte",u:"%",def:10}],
+      calc:(v)=>{
+        const vol=v.surface*(v.epaisseur/1000)*v.nb_couches*(1+v.perte/100);
+        return[{l:"Volume mortier total",v:vol.toFixed(3),u:"m³"},
+               {l:"Ciment",v:Math.ceil((vol*350)/50),u:"sacs 50 kg"},
+               {l:"Sable fin",v:(vol*1.5).toFixed(2),u:"m³"},
+               {l:"Eau estimée",v:Math.round(vol*170),u:"litres"}];}},
+    { id:"chap",  label:"Chape", fields:[
+        {id:"surface",label:"Surface",u:"m²"},
+        {id:"epaisseur",label:"Épaisseur",u:"cm",def:5},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>{
+        const vol=v.surface*(v.epaisseur/100)*(1+v.perte/100);
+        return[{l:"Volume chape + perte",v:vol.toFixed(3),u:"m³"},
+               {l:"Ciment",v:Math.ceil((vol*350)/50),u:"sacs 50 kg"},
+               {l:"Sable",v:(vol*1.4).toFixed(2),u:"m³"},
+               {l:"Eau estimée",v:Math.round(vol*160),u:"litres"}];}},
+  ]},
+  { id:"sols",    icon:"🔲", label:"Dalle & Sols", subcats:[
+    { id:"carr",  label:"Carrelage", fields:[
+        {id:"longueur",label:"Longueur",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"format",label:"Format carreau",u:"cm",def:"60x60",
+          opts:["30x30","40x40","45x45","60x60","60x120","80x80","120x120"]},
+        {id:"perte",label:"Marge perte",u:"%",def:10}],
+      calc:(v)=>{
+        const s=v.longueur*v.largeur;
+        const fmt=String(v.format||"60x60").split("x").map(Number);
+        const sc=(fmt[0]/100)*(fmt[1]/100);
+        const nb=Math.ceil((s*(1+v.perte/100))/sc);
+        return[{l:"Surface brute",v:s.toFixed(1),u:"m²"},
+               {l:"Surface + perte",v:(s*(1+v.perte/100)).toFixed(1),u:"m²",n:`+${v.perte}%`},
+               {l:`Carreaux ${v.format}`,v:nb,u:"unités"},
+               {l:"Colle carrelage",v:Math.ceil((s*5)/25),u:"sacs 25 kg"},
+               {l:"Joint",v:(s*0.3).toFixed(1),u:"kg"}];}},
+    { id:"parq",  label:"Parquet / PVC", fields:[
+        {id:"longueur",label:"Longueur pièce",u:"m"},{id:"largeur",label:"Largeur pièce",u:"m"},
+        {id:"perte",label:"Marge perte coupe",u:"%",def:10}],
+      calc:(v)=>{
+        const s=v.longueur*v.largeur, sP=s*(1+v.perte/100);
+        return[{l:"Surface nette",v:s.toFixed(1),u:"m²"},
+               {l:"Surface à commander",v:sP.toFixed(1),u:"m²",n:`+${v.perte}% coupe`},
+               {l:"Boîtes (typ. 2 m²)",v:Math.ceil(sP/2),u:"boîtes"},
+               {l:"Colle sol (6 kg/m²)",v:Math.ceil(s*6),u:"kg"}];}},
+  ]},
+  { id:"toit",    icon:"🏠", label:"Toiture", subcats:[
+    { id:"tole",  label:"Couverture tôle / bac", fields:[
+        {id:"longueur",label:"Longueur faîtage",u:"m"},
+        {id:"largeur",label:"Largeur demi-versant",u:"m"},
+        {id:"pente",label:"Pente",u:"%",def:30},
+        {id:"nb_versants",label:"Nb versants",u:"u",def:2},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>{
+        const co=Math.sqrt(1+(v.pente/100)**2);
+        const sv=v.longueur*v.largeur*co, sT=sv*v.nb_versants*(1+v.perte/100);
+        const tol=Math.ceil(sT/0.75);
+        return[{l:"Surface par versant",v:sv.toFixed(1),u:"m²"},
+               {l:"Surface totale + perte",v:sT.toFixed(1),u:"m²"},
+               {l:"Tôles bac (75 cm utile)",v:tol,u:"tôles"},
+               {l:"Vis de fixation",v:tol*8,u:"u"},
+               {l:"Faîtage",v:Math.ceil(v.longueur/2),u:"u"},
+               {l:"Gouttières",v:(v.longueur*v.nb_versants).toFixed(1),u:"ml"}];}},
+    { id:"charp", label:"Charpente bois", fields:[
+        {id:"longueur",label:"Longueur bâtiment",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"espacement",label:"Espacement pannes",u:"m",def:1.5},
+        {id:"perte",label:"Marge perte",u:"%",def:10}],
+      calc:(v)=>{
+        const nb=Math.ceil(v.largeur/v.espacement)+1;
+        return[{l:"Nombre pannes",v:nb*2,u:"pannes"},
+               {l:"Longueur totale pannes",v:(nb*v.longueur*(1+v.perte/100)).toFixed(1),u:"ml"},
+               {l:"Chevrons estimés",v:Math.ceil(v.longueur/0.6)*2,u:"u"},
+               {l:"Liteaux (indicatif)",v:(v.longueur*nb*0.4*(1+v.perte/100)).toFixed(1),u:"ml"}];}},
+  ]},
+  { id:"pein",    icon:"🎨", label:"Peinture", subcats:[
+    { id:"peint", label:"Peinture murale", fields:[
+        {id:"surface",label:"Surface totale",u:"m²"},
+        {id:"nb_couches",label:"Nb couches",u:"u",def:2},
+        {id:"rendement",label:"Rendement peinture",u:"m²/L",def:10},
+        {id:"perte",label:"Marge perte",u:"%",def:10}],
+      calc:(v)=>{
+        const tot=v.surface*v.nb_couches*(1+v.perte/100), L=tot/v.rendement;
+        return[{l:"Surface effective totale",v:tot.toFixed(1),u:"m²"},
+               {l:"Peinture nécessaire",v:L.toFixed(1),u:"litres"},
+               {l:"Pots de 20 L",v:Math.ceil(L/20),u:"pots"},
+               {l:"Pots de 5 L",v:Math.ceil(L/5),u:"pots"}];}},
+    { id:"fplaf", label:"Faux plafond", fields:[
+        {id:"longueur",label:"Longueur pièce",u:"m"},{id:"largeur",label:"Largeur pièce",u:"m"},
+        {id:"perte",label:"Marge perte",u:"%",def:10}],
+      calc:(v)=>{
+        const s=v.longueur*v.largeur*(1+v.perte/100), per=2*(v.longueur+v.largeur);
+        return[{l:"Surface faux plafond",v:s.toFixed(1),u:"m²"},
+               {l:"Dalles 60×60",v:Math.ceil(s/0.36),u:"u"},
+               {l:"Profilés porteurs",v:Math.ceil(s/1.2),u:"u"},
+               {l:"Cornières périmètre",v:Math.ceil(per*1.1),u:"ml"},
+               {l:"Suspentes",v:Math.ceil(s),u:"u"}];}},
+  ]},
+  { id:"plom",    icon:"🔧", label:"Plomberie", subcats:[
+    { id:"reseau",label:"Réseau eau / évacuation", fields:[
+        {id:"long_alim",label:"Alimentation (eau)",u:"m"},
+        {id:"long_evac",label:"Évacuation EU/EV",u:"m"},
+        {id:"nb_points",label:"Points d'eau",u:"u"},
+        {id:"perte",label:"Marge perte",u:"%",def:15}],
+      calc:(v)=>[
+        {l:"Tuyaux alimentation",v:(v.long_alim*(1+v.perte/100)).toFixed(1),u:"ml"},
+        {l:"Tuyaux évacuation",v:(v.long_evac*(1+v.perte/100)).toFixed(1),u:"ml"},
+        {l:"Raccords estimés",v:v.nb_points*4,u:"u"},
+        {l:"Robinetteries",v:v.nb_points,u:"u"}]},
+  ]},
+  { id:"elec",    icon:"⚡", label:"Électricité", subcats:[
+    { id:"cable", label:"Câblage & gaines", fields:[
+        {id:"surface",label:"Surface habitable",u:"m²"},
+        {id:"nb_prises",label:"Nb prises",u:"u"},
+        {id:"nb_inter",label:"Nb interrupteurs",u:"u"},
+        {id:"nb_circuits",label:"Nb circuits",u:"u",def:4},
+        {id:"perte",label:"Marge perte",u:"%",def:15}],
+      calc:(v)=>{
+        const c=(v.surface*3+v.nb_prises*3+v.nb_inter*2)*(1+v.perte/100);
+        return[{l:"Câble électrique total",v:c.toFixed(0),u:"ml"},
+               {l:"Gaines ICTA",v:(c*0.8).toFixed(0),u:"ml"},
+               {l:"Prises",v:v.nb_prises,u:"u"},
+               {l:"Interrupteurs",v:v.nb_inter,u:"u"},
+               {l:"Disjoncteurs tableau",v:v.nb_circuits+1,u:"u"}];}},
+  ]},
+  { id:"menu",    icon:"🚪", label:"Menuiserie", subcats:[
+    { id:"pf",    label:"Portes & Fenêtres", fields:[
+        {id:"nb_portes",label:"Nb portes",u:"u",def:3},
+        {id:"larg_porte",label:"Largeur porte",u:"m",def:0.90},
+        {id:"haut_porte",label:"Hauteur porte",u:"m",def:2.10},
+        {id:"nb_fen",label:"Nb fenêtres",u:"u",def:4},
+        {id:"larg_fen",label:"Largeur fenêtre",u:"m",def:1.20},
+        {id:"haut_fen",label:"Hauteur fenêtre",u:"m",def:1.20}],
+      calc:(v)=>{
+        const sP=v.nb_portes*v.larg_porte*v.haut_porte;
+        const sF=v.nb_fen*v.larg_fen*v.haut_fen;
+        return[{l:"Portes",v:v.nb_portes,u:"u"},
+               {l:"Surface portes",v:sP.toFixed(1),u:"m²"},
+               {l:"Fenêtres",v:v.nb_fen,u:"u"},
+               {l:"Surface vitrée",v:sF.toFixed(1),u:"m²"},
+               {l:"Verre commandé",v:(sF*1.1).toFixed(1),u:"m²"}];}},
+  ]},
+  { id:"vrd",     icon:"🛣️", label:"VRD & Extérieur", subcats:[
+    { id:"pave",  label:"Pavés / voirie", fields:[
+        {id:"longueur",label:"Longueur",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"format",label:"Format pavé",u:"cm",def:20,opts:[15,20,25]},
+        {id:"perte",label:"Marge perte",u:"%",def:5}],
+      calc:(v)=>{
+        const s=v.longueur*v.largeur, f=v.format/100;
+        return[{l:"Surface à paver",v:s.toFixed(1),u:"m²"},
+               {l:`Pavés ${v.format}×${v.format} cm`,v:Math.ceil((s*(1+v.perte/100))/(f*f)),u:"u"},
+               {l:"Sable lit de pose",v:(s*0.03).toFixed(2),u:"m³"},
+               {l:"Bordures périmètre",v:Math.ceil(2*(v.longueur+v.largeur)),u:"ml"},
+               {l:"Caniveaux",v:Math.ceil(v.longueur*2),u:"ml"}];}},
+    { id:"bvrd",  label:"Béton voirie", fields:[
+        {id:"longueur",label:"Longueur",u:"m"},{id:"largeur",label:"Largeur",u:"m"},
+        {id:"epaisseur",label:"Épaisseur",u:"m",def:0.15},
+        {id:"perte",label:"Marge perte",u:"%",def:8}],
+      calc:(v)=>beton(v.longueur*v.largeur*v.epaisseur,v.perte)},
+  ]},
 ];
 
-// ─── COULEURS SECTIONS FERRAILLAGE ───────────────────────────────────────
-const SECTION_COLORS = {
-  blue:  { bg: "#0D2A45", border: "#1A4A7A", accent: "#5BB8FF", title: "#90D0FF" },
-  green: { bg: "#0A2A1A", border: "#1A5A30", accent: "#2ECC8A", title: "#7AEFC0" },
-  red:   { bg: "#2A0D0D", border: "#6B1A1A", accent: "#E84A4A", title: "#FF9090" },
-  amber: { bg: "#2A1A05", border: "#6B4510", accent: "#F5A623", title: "#FFD080" },
+// ─── COULEURS FERRAILLAGE ─────────────────────────────────────────────────
+const FCOL = {
+  blue:  {bg:"#08192E",border:"#153A6E",acc:"#5BB8FF",ttl:"#90D0FF"},
+  green: {bg:"#081E12",border:"#145229",acc:"#1FC87A",ttl:"#7AE8B8"},
+  red:   {bg:"#1E0808",border:"#6E1515",acc:"#E84545",ttl:"#FF9090"},
+  amber: {bg:"#1E1008",border:"#6E4015",acc:"#F5A623",ttl:"#FFD080"},
 };
 
-// ─── STYLES ───────────────────────────────────────────────────────────────
-const s = {
-  app:    { fontFamily:"'Barlow','Helvetica Neue',sans-serif", background:C.anthracite, minHeight:"100vh", display:"flex", flexDirection:"column" },
-  header: { background:C.anthraciteMid, borderBottom:`1px solid ${C.anthraciteLight}`, padding:"12px 22px", display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:10 },
-  logoWrap: { display:"flex", alignItems:"center", gap:11 },
-  logoMark: { width:36, height:36, background:C.orange, borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:15, color:"#fff", flexShrink:0 },
-  logoText: { fontSize:17, fontWeight:800, color:C.text, letterSpacing:"0.01em" },
-  logoSub:  { fontSize:10, color:C.textMuted, letterSpacing:"0.1em", textTransform:"uppercase", marginTop:1 },
-  layout:   { display:"flex", flex:1, overflow:"hidden", height:"calc(100vh - 58px)" },
-  sidebar:  { width:212, flexShrink:0, background:C.anthraciteMid, borderRight:`1px solid ${C.anthraciteLight}`, overflowY:"auto", padding:"8px 0" },
-  modLabel: { padding:"6px 14px", fontSize:9, fontWeight:800, letterSpacing:"0.14em", textTransform:"uppercase", color:C.textDim, marginTop:4 },
-  navItem:  (active) => ({ display:"block", width:"100%", textAlign:"left", padding:"7px 14px 7px 20px", fontSize:12, background: active?C.anthraciteLight:"transparent", color: active?C.orange:C.textMuted, border:"none", borderLeft: active?`3px solid ${C.orange}`:"3px solid transparent", cursor:"pointer", fontFamily:"inherit", transition:"all 0.1s" }),
-  main:     { flex:1, overflowY:"auto", padding:"22px 28px" },
-  pageTitle:{ fontSize:20, fontWeight:800, color:C.text, marginBottom:3, display:"flex", alignItems:"center", gap:10 },
-  modTag:   { fontSize:9, fontWeight:800, letterSpacing:"0.08em", textTransform:"uppercase", background:C.orangeDim, color:C.orangeLight, padding:"3px 9px", borderRadius:4 },
-  pageDesc: { fontSize:12, color:C.textMuted, marginBottom:20, marginTop:3 },
-  formCard: { background:C.anthraciteMid, border:`1px solid ${C.anthraciteLight}`, borderRadius:10, padding:"20px", marginBottom:16 },
-  fieldGrid:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(168px,1fr))", gap:14, marginBottom:16 },
-  fieldLabel:{ display:"block", fontSize:10, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", color:C.textMuted, marginBottom:5 },
-  fieldHint: { fontSize:10, color:C.textDim, marginTop:3, fontStyle:"italic" },
-  fieldUnit: { fontSize:10, color:C.textDim, marginTop:3 },
-  input:    { width:"100%", background:C.anthracite, border:`1px solid ${C.anthraciteLight}`, borderRadius:7, padding:"9px 11px", color:C.text, fontSize:13, fontFamily:"inherit", outline:"none", transition:"border-color 0.12s", boxSizing:"border-box" },
-  select:   { width:"100%", background:C.anthracite, border:`1px solid ${C.anthraciteLight}`, borderRadius:7, padding:"9px 11px", color:C.text, fontSize:13, fontFamily:"inherit", outline:"none", cursor:"pointer", boxSizing:"border-box", appearance:"none" },
-  btnCalc:  (hover) => ({ background: hover?C.orangeLight:C.orange, color:"#fff", border:"none", borderRadius:7, padding:"10px 26px", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"background 0.12s", letterSpacing:"0.02em" }),
-  btnReset: { background:"transparent", border:`1px solid ${C.anthraciteLight}`, borderRadius:7, padding:"10px 18px", color:C.textMuted, fontSize:12, cursor:"pointer", fontFamily:"inherit", marginLeft:10 },
-  // résultats standard
-  resCard:  { background:C.anthraciteMid, border:`1px solid ${C.anthraciteLight}`, borderRadius:10, padding:"20px", marginBottom:16 },
-  resTitle: { fontSize:9, fontWeight:800, letterSpacing:"0.14em", textTransform:"uppercase", color:C.textDim, marginBottom:14 },
-  resGrid:  { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(152px,1fr))", gap:10 },
-  resItem:  { background:C.anthracite, border:`1px solid ${C.anthraciteLight}`, borderRadius:7, padding:"12px 14px" },
-  resLbl:   { fontSize:10, color:C.textMuted, marginBottom:5, lineHeight:1.3 },
-  resVal:   { fontSize:20, fontWeight:700, color:C.text, lineHeight:1 },
-  resUnit:  { fontSize:11, fontWeight:400, color:C.textDim, marginLeft:3 },
-  resNote:  { fontSize:10, color:C.green, marginTop:3 },
-  empty:    { textAlign:"center", color:C.textDim, fontSize:12, padding:"32px 0" },
-  // ferraillage sections
-  ferrSection:(color) => ({
-    background: SECTION_COLORS[color].bg,
-    border: `1px solid ${SECTION_COLORS[color].border}`,
-    borderRadius:10, padding:"18px", marginBottom:14,
-  }),
-  ferrTitle:(color) => ({
-    fontSize:10, fontWeight:800, letterSpacing:"0.12em", textTransform:"uppercase",
-    color: SECTION_COLORS[color].title, marginBottom:12,
-  }),
-  ferrGrid: { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:10 },
-  ferrItem: (color, highlight) => ({
-    background: highlight ? SECTION_COLORS[color].border : "rgba(0,0,0,0.25)",
-    border: `1px solid ${SECTION_COLORS[color].border}`,
-    borderRadius:7, padding:"11px 13px",
-    ...(highlight ? { gridColumn:"1 / -1" } : {}),
-  }),
-  ferrLbl:(color) => ({ fontSize:10, color:SECTION_COLORS[color].accent, marginBottom:4, lineHeight:1.3 }),
-  ferrVal:(highlight) => ({ fontSize: highlight?24:19, fontWeight:800, color:"#FFFFFF", lineHeight:1 }),
-  ferrUnit:(color) => ({ fontSize:11, fontWeight:400, color:SECTION_COLORS[color].title, marginLeft:3 }),
-  ferNote: { fontSize:10, color:"#aaa", marginTop:3 },
-  // notice ferraillage
-  notice: { background:"#1A1505", border:`1px solid ${C.amberDim}`, borderRadius:8, padding:"12px 16px", marginBottom:14, fontSize:11, color:C.amber, lineHeight:1.6 },
-};
+// ─── COMPOSANT PRINCIPAL ──────────────────────────────────────────────────
+export default function BatiCalc() {
+  const [screen, setScreen]   = useState("home");   // "home" | "module" | "calc"
+  const [curMod, setCurMod]   = useState(null);
+  const [curSub, setCurSub]   = useState(null);
+  const [vals, setVals]       = useState({});
+  const [results, setResults] = useState(null);
+  const resultsRef            = useRef(null);
 
-// ─── COMPOSANT ───────────────────────────────────────────────────────────
-export default function App() {
-  const [curMod, setCurMod]     = useState("gros-oeuvre");
-  const [curSub, setCurSub]     = useState("terrassement");
-  const [vals, setVals]         = useState({});
-  const [results, setResults]   = useState(null);
-  const [btnHover, setBtnHover] = useState(false);
-
-  const findSub = () => {
-    const m = MODULES.find(x => x.id === curMod);
-    return m?.subcats.find(x => x.id === curSub);
-  };
-  const findMod = () => MODULES.find(x => x.id === curMod);
-
-  const nav = (mId, sId) => { setCurMod(mId); setCurSub(sId); setVals({}); setResults(null); };
-
-  const setVal = (id, v) => setVals(prev => ({ ...prev, [id]: v }));
+  const goHome   = ()         => { setScreen("home"); setCurMod(null); setCurSub(null); setVals({}); setResults(null); };
+  const goModule = (mod)      => { setCurMod(mod); setScreen("module"); setCurSub(null); setVals({}); setResults(null); };
+  const goCalc   = (sub)      => { setCurSub(sub); setVals({}); setResults(null); setScreen("calc"); };
+  const setVal   = (id, v)    => setVals(p => ({ ...p, [id]: v }));
 
   const calculate = () => {
-    const sub = findSub();
-    if (!sub) return;
+    if (!curSub) return;
     const parsed = {};
-    sub.fields.forEach(f => {
+    curSub.fields.forEach(f => {
       if (f.opts && typeof (vals[f.id] ?? f.def ?? f.opts[0]) === "string") {
         parsed[f.id] = vals[f.id] ?? f.def ?? f.opts[0];
       } else {
@@ -680,156 +367,290 @@ export default function App() {
         parsed[f.id] = isNaN(n) ? 0 : n;
       }
     });
-    try { setResults(sub.calc(parsed)); }
-    catch (e) { setResults([{ l: "Erreur de calcul", v: "—", u: "" }]); }
+    try {
+      setResults(curSub.calc(parsed));
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    } catch (e) {
+      setResults([{ l: "Erreur de calcul", v: "—", u: "" }]);
+    }
   };
 
-  const sub = findSub();
-  const mod = findMod();
-  const isFerr = sub?.isFerraillage;
+  const isFerr = curSub?.isFerr;
 
-  return (
-    <div style={s.app}>
-      {/* HEADER */}
-      <header style={s.header}>
-        <div style={s.logoWrap}>
-          <div style={s.logoMark}>2A</div>
-          <div>
-            <div style={s.logoText}>2A DESIGN & BUILD</div>
-            <div style={s.logoSub}>Calculateur de métrés BTP</div>
+  // ── CSS inline global ──
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body, #root { height: 100%; background: ${C.dark}; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: ${C.darkBorder}; border-radius: 2px; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    input[type=number] { -moz-appearance: textfield; }
+  `;
+
+  // ─── SCREEN : HOME ───────────────────────────────────────────────────
+  if (screen === "home") return (
+    <>
+      <style>{css}</style>
+      <div style={{ fontFamily:"'DM Sans',sans-serif", background:C.dark, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
+
+        {/* HEADER */}
+        <div style={{ background:C.darkMid, borderBottom:`1px solid ${C.darkBorder}`, padding:"16px 20px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:42, height:42, background:C.orange, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <span style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:13, color:"#fff", letterSpacing:"-0.5px" }}>BC</span>
+            </div>
+            <div>
+              <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:22, color:C.cream, letterSpacing:"-0.3px" }}>BâtiCalc</div>
+              <div style={{ fontSize:10, color:C.creamMuted, letterSpacing:"0.06em", marginTop:1 }}>
+                Propulsé par <span style={{ color:C.orange }}>Bou Aké × KS BTP</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div style={{ fontSize:11, color:C.textDim }}>9 modules · 20+ calculateurs</div>
-      </header>
 
-      <div style={s.layout}>
-        {/* SIDEBAR */}
-        <nav style={s.sidebar}>
-          {MODULES.map(m => (
-            <div key={m.id}>
-              <div style={s.modLabel}>{m.icon} {m.label}</div>
-              {m.subcats.map(sb => (
-                <button key={sb.id} style={s.navItem(curSub === sb.id)} onClick={() => nav(m.id, sb.id)}>
-                  {sb.label}
-                </button>
+        {/* HERO */}
+        <div style={{ padding:"24px 20px 16px", background:`linear-gradient(160deg,${C.darkMid} 0%,${C.dark} 100%)` }}>
+          <div style={{ fontSize:13, color:C.creamMuted, marginBottom:6 }}>9 modules · 20+ calculateurs</div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:700, color:C.cream, lineHeight:1.3 }}>
+            Choisissez un module<br/>
+            <span style={{ color:C.orange }}>pour commencer</span>
+          </div>
+        </div>
+
+        {/* MODULES GRID */}
+        <div style={{ padding:"0 16px 32px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          {MODULES.map(mod => (
+            <button key={mod.id} onClick={() => goModule(mod)}
+              style={{ background:C.darkCard, border:`1px solid ${C.darkBorder}`, borderRadius:14,
+                       padding:"18px 14px", textAlign:"left", cursor:"pointer", transition:"all 0.15s",
+                       display:"flex", flexDirection:"column", gap:8 }}>
+              <span style={{ fontSize:26 }}>{mod.icon}</span>
+              <div>
+                <div style={{ fontFamily:"'Syne',sans-serif", fontSize:13, fontWeight:700, color:C.cream, lineHeight:1.2 }}>{mod.label}</div>
+                <div style={{ fontSize:11, color:C.creamDim, marginTop:3 }}>{mod.subcats.length} calcul{mod.subcats.length>1?"s":""}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* FOOTER */}
+        <div style={{ textAlign:"center", padding:"16px", fontSize:11, color:C.creamDim, borderTop:`1px solid ${C.darkBorder}` }}>
+          © BâtiCalc · Bou Aké × KS BTP
+        </div>
+      </div>
+    </>
+  );
+
+  // ─── SCREEN : MODULE (liste des sous-calculateurs) ────────────────────
+  if (screen === "module") return (
+    <>
+      <style>{css}</style>
+      <div style={{ fontFamily:"'DM Sans',sans-serif", background:C.dark, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
+
+        {/* TOP BAR */}
+        <div style={{ background:C.darkMid, borderBottom:`1px solid ${C.darkBorder}`, padding:"14px 20px", display:"flex", alignItems:"center", gap:14 }}>
+          <button onClick={goHome}
+            style={{ background:"none", border:"none", color:C.orange, fontSize:22, cursor:"pointer", lineHeight:1, padding:0, display:"flex", alignItems:"center" }}>
+            ←
+          </button>
+          <div>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:800, color:C.cream }}>{curMod.icon} {curMod.label}</div>
+            <div style={{ fontSize:11, color:C.creamMuted }}>Propulsé par Bou Aké × KS BTP</div>
+          </div>
+        </div>
+
+        {/* LISTE */}
+        <div style={{ padding:"16px" }}>
+          <div style={{ fontSize:11, color:C.creamDim, marginBottom:14, textTransform:"uppercase", letterSpacing:"0.08em", fontWeight:600 }}>
+            Sélectionnez un calcul
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {curMod.subcats.map(sub => (
+              <button key={sub.id} onClick={() => goCalc(sub)}
+                style={{ background:C.darkCard, border:`1px solid ${C.darkBorder}`, borderRadius:12,
+                         padding:"16px 18px", textAlign:"left", cursor:"pointer",
+                         display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <div style={{ fontFamily:"'Syne',sans-serif", fontSize:15, fontWeight:700, color:C.cream }}>{sub.label}</div>
+                  <div style={{ fontSize:11, color:C.creamDim, marginTop:3 }}>{sub.fields.length} paramètres</div>
+                </div>
+                <span style={{ color:C.orange, fontSize:20 }}>→</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  // ─── SCREEN : CALC ────────────────────────────────────────────────────
+  return (
+    <>
+      <style>{css}</style>
+      <div style={{ fontFamily:"'DM Sans',sans-serif", background:C.dark, minHeight:"100vh", display:"flex", flexDirection:"column" }}>
+
+        {/* TOP BAR */}
+        <div style={{ background:C.darkMid, borderBottom:`1px solid ${C.darkBorder}`, padding:"14px 20px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:20 }}>
+          <button onClick={() => { setScreen("module"); setResults(null); setVals({}); }}
+            style={{ background:"none", border:"none", color:C.orange, fontSize:22, cursor:"pointer", lineHeight:1, padding:0 }}>
+            ←
+          </button>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontSize:15, fontWeight:800, color:C.cream,
+                          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{curSub.label}</div>
+            <div style={{ fontSize:10, color:C.creamMuted }}>{curMod.label}</div>
+          </div>
+          <div style={{ fontSize:10, fontWeight:600, background:C.orangeDim, color:C.orange,
+                        padding:"3px 10px", borderRadius:20, whiteSpace:"nowrap" }}>
+            {curMod.icon}
+          </div>
+        </div>
+
+        {/* CONTENU */}
+        <div style={{ flex:1, overflowY:"auto", padding:"16px" }}>
+
+          {/* NOTICE FERRAILLAGE */}
+          {isFerr && (
+            <div style={{ background:"#1A1205", border:`1px solid ${C.amberDim}`, borderRadius:10,
+                          padding:"12px 14px", marginBottom:14, fontSize:11, color:C.amber, lineHeight:1.6 }}>
+              ⚠️ Recouvrements : {RECOUV.recouvrement}×ø (Eurocode 2 / BAEL) · Ancrages : {RECOUV.ancrage}×ø · Chutes auto : {RECOUV.chute_pct}%
+            </div>
+          )}
+
+          {/* CHAMPS */}
+          <div style={{ background:C.darkCard, border:`1px solid ${C.darkBorder}`, borderRadius:14,
+                        padding:"18px 16px", marginBottom:14 }}>
+            <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase",
+                          color:C.creamDim, marginBottom:14 }}>Dimensions & paramètres</div>
+
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              {curSub.fields.map(f => (
+                <div key={f.id}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
+                    <label style={{ fontSize:12, fontWeight:600, color:C.creamMuted }}>{f.label}</label>
+                    <span style={{ fontSize:10, color:C.creamDim }}>{f.u}</span>
+                  </div>
+                  {f.opts ? (
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      {f.opts.map(o => {
+                        const cur = vals[f.id] ?? f.def ?? f.opts[0];
+                        const isActive = String(cur) === String(o);
+                        return (
+                          <button key={o} onClick={() => setVal(f.id, o)}
+                            style={{ padding:"8px 14px", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", border:"none",
+                                     background: isActive ? C.orange : C.darkBorder,
+                                     color: isActive ? "#fff" : C.creamMuted,
+                                     transition:"all 0.1s" }}>
+                            {o}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <input
+                      inputMode="decimal"
+                      type="number" min="0" step="any"
+                      placeholder={String(f.def ?? 0)}
+                      value={vals[f.id] ?? ""}
+                      onChange={e => setVal(f.id, e.target.value)}
+                      style={{ width:"100%", background:C.dark, border:`1.5px solid ${C.darkBorder}`,
+                               borderRadius:10, padding:"13px 14px", color:C.cream, fontSize:16,
+                               fontFamily:"'DM Sans',sans-serif", outline:"none" }}
+                      onFocus={e => (e.target.style.borderColor = C.orange)}
+                      onBlur={e  => (e.target.style.borderColor = C.darkBorder)}
+                    />
+                  )}
+                  {f.hint && <div style={{ fontSize:10, color:C.creamDim, marginTop:5, fontStyle:"italic" }}>{f.hint}</div>}
+                </div>
               ))}
             </div>
-          ))}
-        </nav>
 
-        {/* MAIN */}
-        <main style={s.main}>
-          {sub ? (
-            <>
-              <div style={s.pageTitle}>
-                {sub.label}
-                <span style={s.modTag}>{mod?.label}</span>
-              </div>
-              <div style={s.pageDesc}>
-                {isFerr
-                  ? "Saisissez le poids théorique des plans — l'outil intègre recouvrements, ancrages, chutes et pertes chantier."
-                  : "Saisissez les dimensions — quantités calculées avec marges de perte."}
-              </div>
+            {/* BOUTONS */}
+            <div style={{ display:"flex", gap:10, marginTop:20 }}>
+              <button onClick={calculate}
+                style={{ flex:1, background:C.orange, color:"#fff", border:"none", borderRadius:12,
+                         padding:"16px", fontSize:15, fontWeight:700, fontFamily:"'Syne',sans-serif",
+                         cursor:"pointer", letterSpacing:"0.01em" }}>
+                Calculer →
+              </button>
+              <button onClick={() => { setVals({}); setResults(null); }}
+                style={{ padding:"16px 18px", background:"none", border:`1.5px solid ${C.darkBorder}`,
+                         borderRadius:12, color:C.creamMuted, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+                ↺
+              </button>
+            </div>
+          </div>
 
-              {isFerr && (
-                <div style={s.notice}>
-                  ⚠ Recouvrements : {RECOUVREMENT_COEFF.recouvrement}×ø (Eurocode 2 / BAEL) · Ancrages : {RECOUVREMENT_COEFF.ancrage}×ø · Chutes automatiques : {RECOUVREMENT_COEFF.chute_pct}%
-                </div>
-              )}
-
-              {/* FORM */}
-              <div style={s.formCard}>
-                <div style={s.fieldGrid}>
-                  {sub.fields.map(f => (
-                    <div key={f.id}>
-                      <label style={s.fieldLabel}>{f.label}</label>
-                      {f.opts ? (
-                        <select
-                          style={s.select}
-                          value={vals[f.id] ?? f.def ?? f.opts[0]}
-                          onChange={e => setVal(f.id, e.target.value)}
-                        >
-                          {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : (
-                        <input
-                          type="number" min="0" step="any"
-                          placeholder={f.def ?? 0}
-                          value={vals[f.id] ?? ""}
-                          style={s.input}
-                          onChange={e => setVal(f.id, e.target.value)}
-                          onFocus={e => (e.target.style.borderColor = C.orange)}
-                          onBlur={e  => (e.target.style.borderColor = C.anthraciteLight)}
-                        />
-                      )}
-                      {f.hint && <div style={s.fieldHint}>{f.hint}</div>}
-                      {!f.hint && <div style={s.fieldUnit}>{f.unit}</div>}
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display:"flex", alignItems:"center" }}>
-                  <button
-                    style={s.btnCalc(btnHover)}
-                    onMouseEnter={() => setBtnHover(true)}
-                    onMouseLeave={() => setBtnHover(false)}
-                    onClick={calculate}
-                  >
-                    Calculer
-                  </button>
-                  <button style={s.btnReset} onClick={() => { setVals({}); setResults(null); }}>
-                    Réinitialiser
-                  </button>
-                </div>
-              </div>
-
-              {/* RESULTS */}
-              {results ? (
-                isFerr && results.type === "ferraillage" ? (
-                  // ── RENDU SPÉCIAL FERRAILLAGE ──────────────────────────
-                  <div>
-                    {results.sections.map(sec => (
-                      <div key={sec.title} style={s.ferrSection(sec.color)}>
-                        <div style={s.ferrTitle(sec.color)}>{sec.title}</div>
-                        <div style={s.ferrGrid}>
+          {/* RÉSULTATS */}
+          <div ref={resultsRef}>
+            {results ? (
+              isFerr && results.type === "ferraillage" ? (
+                // ── FERRAILLAGE ──────────────────────────────────────
+                <div>
+                  {results.sections.map(sec => {
+                    const fc = FCOL[sec.color];
+                    return (
+                      <div key={sec.title} style={{ background:fc.bg, border:`1px solid ${fc.border}`,
+                                                     borderRadius:14, padding:"16px", marginBottom:12 }}>
+                        <div style={{ fontSize:10, fontWeight:800, letterSpacing:"0.12em", textTransform:"uppercase",
+                                      color:fc.ttl, marginBottom:12 }}>{sec.title}</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                           {sec.items.map((it, i) => (
-                            <div key={i} style={s.ferrItem(sec.color, it.highlight)}>
-                              <div style={s.ferrLbl(sec.color)}>{it.l}</div>
-                              <div style={s.ferrVal(it.highlight)}>
-                                {it.v}
-                                <span style={s.ferrUnit(sec.color)}>{it.u}</span>
+                            <div key={i} style={{ background: it.highlight ? fc.border : "rgba(0,0,0,0.3)",
+                                                  border:`1px solid ${fc.border}`, borderRadius:10,
+                                                  padding:"12px 14px",
+                                                  ...(it.highlight ? { marginTop:4 } : {}) }}>
+                              <div style={{ fontSize:11, color:fc.acc, marginBottom:4 }}>{it.l}</div>
+                              <div style={{ fontFamily:"'Syne',sans-serif", fontSize: it.highlight?22:18,
+                                            fontWeight:800, color:"#fff" }}>
+                                {it.v} <span style={{ fontSize:12, fontWeight:400, color:fc.ttl }}>{it.u}</span>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                // ── STANDARD ────────────────────────────────────────
+                <div style={{ background:C.darkCard, border:`1px solid ${C.darkBorder}`,
+                              borderRadius:14, padding:"18px 16px" }}>
+                  <div style={{ fontSize:10, fontWeight:700, letterSpacing:"0.1em", textTransform:"uppercase",
+                                color:C.creamDim, marginBottom:14 }}>Résultats du calcul</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {(Array.isArray(results) ? results : []).map((r, i) => (
+                      <div key={i} style={{ background:C.dark, border:`1px solid ${C.darkBorder}`,
+                                            borderRadius:10, padding:"12px 14px",
+                                            display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:11, color:C.creamMuted, lineHeight:1.3, marginBottom:2 }}>{r.l}</div>
+                          {r.n && <div style={{ fontSize:10, color:C.green }}>{r.n}</div>}
+                        </div>
+                        <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
+                          <span style={{ fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:800, color:C.cream }}>{r.v}</span>
+                          <span style={{ fontSize:11, color:C.creamDim, marginLeft:4 }}>{r.u}</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                ) : (
-                  // ── RENDU STANDARD ──────────────────────────────────────
-                  <div style={s.resCard}>
-                    <div style={s.resTitle}>Résultats du calcul</div>
-                    <div style={s.resGrid}>
-                      {(Array.isArray(results) ? results : []).map((r, i) => (
-                        <div key={i} style={s.resItem}>
-                          <div style={s.resLbl}>{r.l}</div>
-                          <div style={s.resVal}>{r.v}<span style={s.resUnit}>{r.u}</span></div>
-                          {r.n && <div style={s.resNote}>{r.n}</div>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div style={s.resCard}>
-                  <div style={s.empty}>Remplissez les champs et cliquez sur Calculer.</div>
                 </div>
-              )}
-            </>
-          ) : (
-            <div style={s.empty}>Sélectionnez un calcul dans le menu.</div>
-          )}
-        </main>
+              )
+            ) : (
+              <div style={{ textAlign:"center", padding:"32px 0", color:C.creamDim, fontSize:12 }}>
+                Remplissez les champs puis appuyez sur Calculer.
+              </div>
+            )}
+          </div>
+
+          {/* FOOTER */}
+          <div style={{ textAlign:"center", padding:"24px 0 8px", fontSize:11, color:C.creamDim }}>
+            BâtiCalc · Bou Aké × KS BTP
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
