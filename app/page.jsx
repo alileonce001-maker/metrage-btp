@@ -679,34 +679,22 @@ export default function App() {
   const [toasts, setToasts]   = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const resultsRef = useRef(null);
-useEffect(() => {
-  const checkMobile = () => {
-    if (typeof window !== "undefined") {
-      setIsMobile(window.innerWidth < 768);
-    }
-  };
 
-  checkMobile();
+  // ─── SSR-SAFE INIT ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-  if (typeof window !== "undefined") {
-    window.addEventListener("resize", checkMobile);
-  }
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("baticalc-history");
+      if (s) setHistory(JSON.parse(s));
+    } catch {}
+  }, []);
 
-  return () => {
-    if (typeof window !== "undefined") {
-      window.removeEventListener("resize", checkMobile);
-    }
-  };
-}, []);
-
-useEffect(() => {
-  try {
-    const s = localStorage.getItem("baticalc-history");
-    if (s) {
-      setHistory(JSON.parse(s));
-    }
-  } catch {}
-}, []);
   const addToast = useCallback((msg, type = "success") => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, msg, type }]);
