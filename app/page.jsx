@@ -1,5 +1,8 @@
 "use client";
+
 import { useState, useRef, useEffect, useCallback } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 // ─── PALETTE ────────────────────────────────────────────────────────────────
 const C = {
@@ -776,8 +779,6 @@ export default function App() {
     if (!resultsRef.current) return;
     addToast("Génération PDF…", "info");
     try {
-      const { default: jsPDF } = await import("https://esm.sh/jspdf@2.5.1");
-      const { default: html2canvas } = await import("https://esm.sh/html2canvas@1.4.1");
       const canvas = await html2canvas(resultsRef.current, { scale: 2, backgroundColor: "#16191E" });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
