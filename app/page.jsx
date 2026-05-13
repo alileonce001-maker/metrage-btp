@@ -1,4 +1,5 @@
 "use client";
+                                                                                                                                                                                                                                                                   import { useState, useRef, useEffect, useCallback } from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 // ─── PALETTE ────────────────────────────────────────────────────────────────
@@ -666,21 +667,41 @@ function HistoryItem({ item, onRestore, onDelete, expanded, onToggle }) {
 
 // ─── APP PRINCIPAL ───────────────────────────────────────────────────────────
 export default function App() {
-  const [isMobile]       = useState(() => window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(false);
   const [curMod, setCurMod]   = useState("gros-oeuvre");
   const [curSub, setCurSub]   = useState("terrassement");
   const [vals, setVals]       = useState({});
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [screen, setScreen]   = useState("calc"); // "calc" | "history"
-  const [history, setHistory] = useState(() => {
-    try { const s = localStorage.getItem("baticalc-history"); return s ? JSON.parse(s) : []; }
-    catch { return []; }
-  });
+  const [history, setHistory] = useState([]);
+  };
   const [expandedHistory, setExpandedHistory] = useState({});
   const [toasts, setToasts]   = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const resultsRef = useRef(null);
+  useEffect(() => {
+  const checkMobile = () => {
+    setIsMobile(window.innerWidth < 768);
+  };
+
+  checkMobile();
+
+  window.addEventListener("resize", checkMobile);
+
+  return () => {
+    window.removeEventListener("resize", checkMobile);
+  };
+}, []);
+
+useEffect(() => {
+  try {
+    const s = localStorage.getItem("baticalc-history");
+    if (s) {
+      setHistory(JSON.parse(s));
+    }
+  } catch {}
+}, []);
 
   const addToast = useCallback((msg, type = "success") => {
     const id = Date.now();
@@ -1149,4 +1170,4 @@ export default function App() {
       )}
     </div>
   );
-}
+}                                                                       
