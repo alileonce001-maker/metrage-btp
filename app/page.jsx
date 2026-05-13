@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 // ─── PALETTE ────────────────────────────────────────────────────────────────
 const C = {
@@ -779,6 +777,10 @@ export default function App() {
     if (!resultsRef.current) return;
     addToast("Génération PDF…", "info");
     try {
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import("jspdf"),
+        import("html2canvas"),
+      ]);
       const canvas = await html2canvas(resultsRef.current, { scale: 2, backgroundColor: "#16191E" });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
