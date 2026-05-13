@@ -1,5 +1,4 @@
 "use client";
-                                                                                                                                                                                                                                                                   import { useState, useRef, useEffect, useCallback } from "react";
 import { useState, useRef, useEffect, useCallback } from "react";
 
 // ─── PALETTE ────────────────────────────────────────────────────────────────
@@ -188,33 +187,33 @@ const MODULES = [
             type: "ferraillage",
             sections: [
               { title: "Longueurs calculées", color: "blue", items: [
-                  { l: "Long. théorique (plans)",      v: long_theorique.toFixed(1),   u: "ml" },
-                  { l: `Recouvrements (${RECOUVREMENT_COEFF.recouvrement}×ø)`, v: long_recouv.toFixed(2), u: "ml" },
-                  { l: `Ancrages (${RECOUVREMENT_COEFF.ancrage}×ø)`,           v: long_ancrage.toFixed(2), u: "ml" },
-                  { l: "Chutes estimées (3%)",         v: long_chutes.toFixed(2),      u: "ml" },
-                  { l: "Long. nette nécessaire",       v: long_nette.toFixed(1),       u: "ml" },
-                  { l: `+ Perte chantier (${v.perte_chantier}%)`, v: long_avec_perte.toFixed(1), u: "ml" },
+                { l: "Long. théorique (plans)",      v: long_theorique.toFixed(1),   u: "ml" },
+                { l: `Recouvrements (${RECOUVREMENT_COEFF.recouvrement}×ø)`, v: long_recouv.toFixed(2), u: "ml" },
+                { l: `Ancrages (${RECOUVREMENT_COEFF.ancrage}×ø)`,           v: long_ancrage.toFixed(2), u: "ml" },
+                { l: "Chutes estimées (3%)",         v: long_chutes.toFixed(2),      u: "ml" },
+                { l: "Long. nette nécessaire",       v: long_nette.toFixed(1),       u: "ml" },
+                { l: `+ Perte chantier (${v.perte_chantier}%)`, v: long_avec_perte.toFixed(1), u: "ml" },
               ]},
               { title: "Barres à acheter", color: "green", items: [
-                  { l: `Barres HA${d} de ${v.long_barre} m`, v: nb_barres,              u: "barres" },
-                  { l: "Longueur achetée totale",            v: long_achetee.toFixed(1), u: "ml" },
-                  { l: `Poids unitaire HA${d}`,             v: pu.toFixed(4),           u: "kg/ml" },
-                  { l: "Poids acier principal",             v: poids_achete.toFixed(1), u: "kg" },
-                  { l: `Poids cadres HA${v.diam_cadre}`,   v: poids_cadres.toFixed(1), u: "kg" },
-                  { l: "Poids total acier",                v: poids_total.toFixed(1),  u: "kg" },
+                { l: `Barres HA${d} de ${v.long_barre} m`, v: nb_barres,              u: "barres" },
+                { l: "Longueur achetée totale",            v: long_achetee.toFixed(1), u: "ml" },
+                { l: `Poids unitaire HA${d}`,             v: pu.toFixed(4),           u: "kg/ml" },
+                { l: "Poids acier principal",             v: poids_achete.toFixed(1), u: "kg" },
+                { l: `Poids cadres HA${v.diam_cadre}`,   v: poids_cadres.toFixed(1), u: "kg" },
+                { l: "Poids total acier",                v: poids_total.toFixed(1),  u: "kg" },
               ]},
               { title: "Pertes & surcoût", color: "red", items: [
-                  { l: "Poids théorique projet",    v: v.poids_theorique.toFixed(1), u: "kg" },
-                  { l: "Poids réel acheté",         v: poids_achete.toFixed(1),      u: "kg" },
-                  { l: "Poids perdu",               v: poids_perte.toFixed(1),       u: "kg" },
-                  { l: "% perte réelle",            v: pct_perte_reelle,             u: "%" },
-                  { l: "Coût perte",                v: Math.round(cout_perte).toLocaleString("fr-FR"), u: "FCFA" },
+                { l: "Poids théorique projet",    v: v.poids_theorique.toFixed(1), u: "kg" },
+                { l: "Poids réel acheté",         v: poids_achete.toFixed(1),      u: "kg" },
+                { l: "Poids perdu",               v: poids_perte.toFixed(1),       u: "kg" },
+                { l: "% perte réelle",            v: pct_perte_reelle,             u: "%" },
+                { l: "Coût perte",                v: Math.round(cout_perte).toLocaleString("fr-FR"), u: "FCFA" },
               ]},
               { title: "Coût d'achat réel", color: "amber", items: [
-                  { l: "Prix / tonne",              v: v.prix_tonne.toLocaleString("fr-FR"),               u: "FCFA/t" },
-                  { l: "Coût acier principal",      v: Math.round((poids_achete / 1000) * v.prix_tonne).toLocaleString("fr-FR"), u: "FCFA" },
-                  { l: "Coût cadres/étriers",       v: Math.round((poids_cadres  / 1000) * v.prix_tonne).toLocaleString("fr-FR"), u: "FCFA" },
-                  { l: "COÛT TOTAL RÉEL",           v: Math.round(cout_total).toLocaleString("fr-FR"),     u: "FCFA", highlight: true },
+                { l: "Prix / tonne",              v: v.prix_tonne.toLocaleString("fr-FR"),               u: "FCFA/t" },
+                { l: "Coût acier principal",      v: Math.round((poids_achete / 1000) * v.prix_tonne).toLocaleString("fr-FR"), u: "FCFA" },
+                { l: "Coût cadres/étriers",       v: Math.round((poids_cadres  / 1000) * v.prix_tonne).toLocaleString("fr-FR"), u: "FCFA" },
+                { l: "COÛT TOTAL RÉEL",           v: Math.round(cout_total).toLocaleString("fr-FR"),     u: "FCFA", highlight: true },
               ]},
             ],
           };
@@ -593,14 +592,15 @@ function Skeleton() {
 // ─── RÉSULTAT ITEM ───────────────────────────────────────────────────────────
 function ResItem({ r }) {
   return (
-    <div style={{
-      background: C.anthracite,
-      border: `1px solid ${C.anthraciteBorder}`,
-      borderRadius: 8, padding: "12px 14px",
-      transition: "border-color 0.15s",
-    }}
-    onMouseEnter={e => e.currentTarget.style.borderColor = C.orange}
-    onMouseLeave={e => e.currentTarget.style.borderColor = C.anthraciteBorder}
+    <div
+      style={{
+        background: C.anthracite,
+        border: `1px solid ${C.anthraciteBorder}`,
+        borderRadius: 8, padding: "12px 14px",
+        transition: "border-color 0.15s",
+      }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = C.orange}
+      onMouseLeave={e => e.currentTarget.style.borderColor = C.anthraciteBorder}
     >
       <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 6, lineHeight: 1.4 }}>{r.l}</div>
       <div style={{ fontSize: 22, fontWeight: 700, color: C.text, lineHeight: 1 }}>
@@ -667,41 +667,21 @@ function HistoryItem({ item, onRestore, onDelete, expanded, onToggle }) {
 
 // ─── APP PRINCIPAL ───────────────────────────────────────────────────────────
 export default function App() {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile]       = useState(() => window.innerWidth < 768);
   const [curMod, setCurMod]   = useState("gros-oeuvre");
   const [curSub, setCurSub]   = useState("terrassement");
   const [vals, setVals]       = useState({});
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [screen, setScreen]   = useState("calc"); // "calc" | "history"
-  const [history, setHistory] = useState([]);
-  };
+  const [screen, setScreen]   = useState("calc");
+  const [history, setHistory] = useState(() => {
+    try { const s = localStorage.getItem("baticalc-history"); return s ? JSON.parse(s) : []; }
+    catch { return []; }
+  });
   const [expandedHistory, setExpandedHistory] = useState({});
   const [toasts, setToasts]   = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const resultsRef = useRef(null);
-  useEffect(() => {
-  const checkMobile = () => {
-    setIsMobile(window.innerWidth < 768);
-  };
-
-  checkMobile();
-
-  window.addEventListener("resize", checkMobile);
-
-  return () => {
-    window.removeEventListener("resize", checkMobile);
-  };
-}, []);
-
-useEffect(() => {
-  try {
-    const s = localStorage.getItem("baticalc-history");
-    if (s) {
-      setHistory(JSON.parse(s));
-    }
-  } catch {}
-}, []);
 
   const addToast = useCallback((msg, type = "success") => {
     const id = Date.now();
@@ -741,7 +721,6 @@ useEffect(() => {
       try {
         const res = sub.calc(parsed);
         setResults(res);
-        // sauvegarde historique
         const entry = {
           id: Date.now(),
           module: findMod()?.label || "",
@@ -792,7 +771,6 @@ useEffect(() => {
       const pdf = new jsPDF("p", "mm", "a4");
       const sub = findSub();
       const mod = findMod();
-      // Header
       pdf.setFillColor(22, 25, 30);
       pdf.rect(0, 0, 210, 297, "F");
       pdf.setFillColor(232, 101, 10);
@@ -820,7 +798,7 @@ useEffect(() => {
   const mod = findMod();
   const isFerr = sub?.isFerraillage;
 
-  // ─── SIDEBAR CONTENT ──────────────────────────────────────────────────────
+  // ─── SIDEBAR CONTENT ────────────────────────────────────────────────────────
   const SidebarContent = () => (
     <nav style={{
       width: isMobile ? "100%" : 220,
@@ -857,7 +835,7 @@ useEffect(() => {
     </nav>
   );
 
-  // ─── MAIN CONTENT ─────────────────────────────────────────────────────────
+  // ─── MAIN CONTENT ───────────────────────────────────────────────────────────
   const MainContent = () => {
     if (screen === "history") {
       return (
@@ -907,7 +885,6 @@ useEffect(() => {
       <main style={{ flex: 1, overflowY: "auto", padding: isMobile ? "16px 14px 100px" : "22px 28px 80px" }}>
         {sub ? (
           <>
-            {/* TITRE */}
             <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 800, color: C.text, marginBottom: 3, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               {sub.label}
               <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", background: C.orangeDim, color: C.orangeLight, padding: "3px 9px", borderRadius: 4 }}>
@@ -920,14 +897,12 @@ useEffect(() => {
                 : "Quantités calculées avec marges de perte."}
             </div>
 
-            {/* NOTICE FERRAILLAGE */}
             {isFerr && (
               <div style={{ background: "#1A1505", border: `1px solid ${C.amberDim}`, borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 11, color: C.amber, lineHeight: 1.6 }}>
                 ⚠ Recouvrements : {RECOUVREMENT_COEFF.recouvrement}×ø · Ancrages : {RECOUVREMENT_COEFF.ancrage}×ø · Chutes : {RECOUVREMENT_COEFF.chute_pct}%
               </div>
             )}
 
-            {/* FORMULAIRE */}
             <div style={{ background: C.anthraciteMid, border: `1px solid ${C.anthraciteBorder}`, borderRadius: 10, padding: isMobile ? 14 : 20, marginBottom: 16 }}>
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill,minmax(160px,1fr))", gap: 12, marginBottom: 16 }}>
                 {sub.fields.map(f => (
@@ -960,7 +935,6 @@ useEffect(() => {
                 ))}
               </div>
 
-              {/* BOUTONS */}
               <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: "1fr 1fr", gap: 10, alignItems: "center" }}>
                 <button
                   onClick={calculate}
@@ -993,7 +967,6 @@ useEffect(() => {
               </div>
             </div>
 
-            {/* RÉSULTATS */}
             <div ref={resultsRef}>
               {loading ? (
                 <div style={{ background: C.anthraciteMid, border: `1px solid ${C.anthraciteBorder}`, borderRadius: 10, padding: 20 }}>
@@ -1063,7 +1036,9 @@ useEffect(() => {
         @keyframes slideIn { from { transform: translateX(60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
         * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #363B45; border-radius: 4px; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #363B45; border-radius: 4px; }
       `}</style>
 
       {/* HEADER */}
@@ -1158,10 +1133,8 @@ useEffect(() => {
         </nav>
       )}
 
-      {/* TOASTS */}
       <Toast toasts={toasts} />
 
-      {/* FOOTER (desktop) */}
       {!isMobile && (
         <footer style={{ background: C.anthraciteMid, borderTop: `1px solid ${C.anthraciteBorder}`, padding: "8px 22px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 11, color: C.textDim, fontWeight: 600 }}>Bâti-Calc</span>
@@ -1170,4 +1143,4 @@ useEffect(() => {
       )}
     </div>
   );
-}                                                                       
+}
